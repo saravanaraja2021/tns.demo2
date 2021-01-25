@@ -1,36 +1,72 @@
-#!C:\Strawberry\perl\bin\perl
+use DBI;
+my $user = 'sa';
+my $password = 'sa';
+my $dbsource = 'adventureworks2019';
 
-# no type declaration in perl
-# dynamically typed language
+#my $dbh = DBI->connect("dbi:ODBC:Driver={};Server=192.168.3.137;UID=$user;PWD=$password")
+
+my $dbh = DBI->connect("dbi:ODBC:Driver={SQL Server Native Client 11.0};Server=localhost;Database=$dbsource;UID=$user;PWD=$password");
+
+$dbh->do(q/CREATE or alter PROCEDURE usp_ExportImage4 (
+   @PicName NVARCHAR (100)
+   ,@ImageFolderPath NVARCHAR(1000)
+   ,@Filename NVARCHAR(1000)
+   )
+AS
+BEGIN
+   DECLARE @ImageData VARBINARY (max);
+   DECLARE @Path2OutFile NVARCHAR (2000);
+   DECLARE @Obj INT
+ 
+   SET NOCOUNT ON
+ 
+   SELECT @ImageData = (
+         SELECT convert (VARBINARY (max), img, 1)
+         FROM AdventureWorks2019.Production.myimages
+         WHERE id = @PicName
+         );
+ 
+   SET @Path2OutFile = CONCAT (
+         @ImageFolderPath
+         ,'\'
+         , @Filename
+         );
+    BEGIN TRY
+     EXEC sp_OACreate 'ADODB.Stream' ,@Obj OUTPUT;
+     EXEC sp_OASetProperty @Obj ,'Type',1;
+     EXEC sp_OAMethod @Obj,'Open';
+     EXEC sp_OAMethod @Obj,'Write', NULL, @ImageData;
+     EXEC sp_OAMethod @Obj,'SaveToFile', NULL, @Path2OutFile, 2;
+     EXEC sp_OAMethod @Obj,'Close';
+     EXEC sp_OADestroy @Obj;
+    END TRY
+    
+ BEGIN CATCH
+  EXEC sp_OADestroy @Obj;
+ END CATCH
+ 
+   SET NOCOUNT OFF
+END/);
+
+my $sth1 = $dbh->prepare ("{call usp_ExportImage2(?, ?, ?)}");
 
 
 
-$counter =1;
-
-do 
-{
-print "enter first number\n";
-
-while (($num1 = <STDIN>) =~ "[a-z]"){
-   print "enter valid number\n";
+=cut
+while ( my @row = $sth->fetchrow_array ) {
+      print "@row\n";
 }
 
-print "enter second number\n";
-while (($num2 = <STDIN>) =~ "[a-z]"){
-   print "enter valid number\n";
-}
 
-
-$add=$num1 + $num2 ;
-$sub =$num1 - $num2 ;
-$mul =$num1 * $num2 ;
-$div = $num1 / $num2 ;
-
-print "addition = $add\nsubtraction = $sub\nmulti = $mul\ndivision = $div\n";
-
-$counter++;
-
-} while ($counter <=5)
-
-
-
+my $sql = "SELECT o.[name], o.[id], c.[id], c.[name], t.[name]
+FROM dbo.syscolumns c
+INNER JOIN dbo.sysobjects o
+ON c.id = o.id
+INNER JOIN dbo.systypes t
+ON c.xtype = t.xtype
+WHERE c.xtype IN (35, 165, 99, 34, 173)
+AND o.[name] NOT LIKE 'sys%'
+AND o.[name] <> 'dtproperties'
+AND o.xtype = 'U'
+";
+=
